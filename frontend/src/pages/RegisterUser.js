@@ -123,10 +123,10 @@ const RegisterUser = () => {
 
   return (
     <div className="page-container">
-      <Header 
+      {/* <Header 
         title="Register User" 
         subtitle="Create new user accounts (Admin, HOD, or Staff)" 
-      />
+      /> */}
 
       <div className="table-card" style={{ maxWidth: '800px', margin: '0 auto' }}>
         <div className="table-header">

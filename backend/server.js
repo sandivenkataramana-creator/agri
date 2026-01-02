@@ -7,6 +7,11 @@ const app = express();
 // Better logging for debugging unexpected exits
 process.on('uncaughtException', (err) => {
   console.error('UNCAUGHT EXCEPTION:', err);
+  // Don't exit on SMTP errors
+  if (err.code === 'EAUTH') {
+    console.log('Continuing despite SMTP authentication error...');
+    return;
+  }
   process.exit(1);
 });
 process.on('unhandledRejection', (reason, promise) => {

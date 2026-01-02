@@ -9,9 +9,10 @@ logs
 *.log
 debug.log
 
-# IDE
-.vscode/
-.DS_Store
+# Build
+dist/   
+build/
 
-# Coverage
-coverage/
+# IDE
+# .vscode/
+# .DS_Store

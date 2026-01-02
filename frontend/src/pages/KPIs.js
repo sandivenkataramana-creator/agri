@@ -119,7 +119,7 @@ const KPIs = () => {
   if (loading) {
     return (
       <div className="page-container">
-        <Header title="KPIs Management" />
+        {/* <Header title="KPIs Management" /> */}
         <div className="loading-message">Loading KPIs...</div>
       </div>
     );
@@ -128,7 +128,7 @@ const KPIs = () => {
   if (error) {
     return (
       <div className="page-container">
-        <Header title="KPIs Management" />
+        {/* <Header title="KPIs Management" /> */}
         <div className="error-message">{error}</div>
       </div>
     );
@@ -140,7 +140,7 @@ const KPIs = () => {
 
   return (
     <div className="page-container">
-      <Header title="KPIs Management" />
+      {/* <Header title="KPIs Management" /> */}
 
       {/* Summary Cards */}
       <div className="stats-grid">

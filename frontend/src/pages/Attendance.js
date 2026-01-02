@@ -139,7 +139,7 @@ const Attendance = () => {
   if (loading) {
     return (
       <div className="page-container">
-        <Header title="Attendance Management" />
+        {/* <Header title="Attendance Management" /> */}
         <div className="loading-message">Loading attendance data...</div>
       </div>
     );
@@ -148,7 +148,7 @@ const Attendance = () => {
   if (error) {
     return (
       <div className="page-container">
-        <Header title="Attendance Management" />
+        {/* <Header title="Attendance Management" /> */}
         <div className="error-message">{error}</div>
       </div>
     );
@@ -156,7 +156,7 @@ const Attendance = () => {
 
   return (
     <div className="page-container">
-      <Header title="Attendance Management" />
+      {/* <Header title="Attendance Management" /> */}
 
       {/* Summary Cards */}
       <div className="stats-grid">

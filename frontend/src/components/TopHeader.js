@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { FiBell, FiMail, FiSearch, FiSettings, FiHelpCircle, FiLogOut, FiUser, FiChevronDown, FiX, FiCheck, FiAlertCircle, FiInfo, FiMessageSquare, FiLock } from 'react-icons/fi';
 import { getNotifications, getMessages, searchAll } from '../services/api';
 
@@ -14,9 +14,42 @@ const TopHeader = ({ user, onLogout }) => {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  // Refs for click outside detection
+  const helpRef = useRef(null);
+  const notificationsRef = useRef(null);
+  const messagesRef = useRef(null);
+  const userMenuRef = useRef(null);
+  const searchRef = useRef(null);
+
   useEffect(() => {
     fetchNotifications();
     fetchMessages();
+  }, []);
+
+  // Handle click outside to close dropdowns
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (helpRef.current && !helpRef.current.contains(event.target)) {
+        setShowHelp(false);
+      }
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
+        setShowNotifications(false);
+      }
+      if (messagesRef.current && !messagesRef.current.contains(event.target)) {
+        setShowMessages(false);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+        setShowUserMenu(false);
+      }
+      if (searchRef.current && !searchRef.current.contains(event.target)) {
+        setShowSearch(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
 
   const fetchNotifications = async () => {
@@ -89,7 +122,7 @@ const TopHeader = ({ user, onLogout }) => {
         <div className="top-header-logo">
           <img src={process.env.REACT_APP_HEADER_LOGO || '/tglogo.png'} alt="Logo" style={{ height: 40, borderRadius: 8, marginRight: 12 }} />
           <div>
-            <h1>ACS State HOD Management</h1>
+            <h1>State HOD Management</h1>
             <span>Telangana</span>
           </div>
         </div>
@@ -97,7 +130,7 @@ const TopHeader = ({ user, onLogout }) => {
       
       <div className="top-header-right">
         {/* Search */}
-        <div className="search-container" style={{ position: 'relative' }}>
+        <div ref={searchRef} className="search-container" style={{ position: 'relative' }}>
           <div style={{ 
             display: 'flex', 
             alignItems: 'center', 
@@ -149,7 +182,7 @@ const TopHeader = ({ user, onLogout }) => {
         </div>
         
         {/* Help */}
-        <div style={{ position: 'relative' }}>
+        <div ref={helpRef} style={{ position: 'relative' }}>
           <button 
             className="header-icon-btn" 
             title="Help"
@@ -182,7 +215,7 @@ const TopHeader = ({ user, onLogout }) => {
         </div>
         
         {/* Notifications */}
-        <div style={{ position: 'relative' }}>
+        <div ref={notificationsRef} style={{ position: 'relative' }}>
           <button 
             className="header-icon-btn" 
             title="Notifications"
@@ -231,7 +264,7 @@ const TopHeader = ({ user, onLogout }) => {
         </div>
         
         {/* Messages */}
-        <div style={{ position: 'relative' }}>
+        <div ref={messagesRef} style={{ position: 'relative' }}>
           <button 
             className="header-icon-btn" 
             title="Messages"
@@ -278,7 +311,7 @@ const TopHeader = ({ user, onLogout }) => {
           )}
         </div>
         
-        <div className="user-menu-container">
+        <div ref={userMenuRef} className="user-menu-container">
           <div 
             className="user-profile" 
             onClick={() => setShowUserMenu(!showUserMenu)}

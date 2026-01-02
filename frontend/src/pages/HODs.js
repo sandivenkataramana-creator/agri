@@ -118,7 +118,7 @@ const HODs = () => {
   if (loading) {
     return (
       <div className="page-container">
-        <Header title="HODs Management" />
+        {/* <Header title="HODs Management" /> */}
         <div className="loading-message">Loading HODs...</div>
       </div>
     );
@@ -127,7 +127,7 @@ const HODs = () => {
   if (error) {
     return (
       <div className="page-container">
-        <Header title="HODs Management" />
+        {/* <Header title="HODs Management" /> */}
         <div className="error-message">{error}</div>
       </div>
     );
@@ -135,7 +135,7 @@ const HODs = () => {
 
   return (
     <div className="page-container">
-      <Header title="HODs Management" />
+      {/* <Header title="HODs Management" /> */}
 
       <div className="table-card">
         <div className="table-header">

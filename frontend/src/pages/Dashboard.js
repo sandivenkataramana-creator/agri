@@ -1,19 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
 import ListModal from '../components/ListModal';
-import { Pie, Bar } from 'react-chartjs-2';
+import { Pie, Bar, Line } from 'react-chartjs-2';
 import * as XLSX from 'xlsx';
 import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
   BarElement,
+  PointElement,
+  LineElement,
   Title,
   Tooltip,
   Legend,
   ArcElement,
 } from 'chart.js';
-import { FiUsers, FiFileText, FiDollarSign, FiTrendingUp, FiActivity, FiPieChart, FiBarChart2 } from 'react-icons/fi';
+import ChartDataLabels from 'chartjs-plugin-datalabels';
+import { FiUsers, FiFileText, FiDollarSign, FiTrendingUp, FiActivity, FiPieChart, FiBarChart2, FiFilter } from 'react-icons/fi';
 import {
   getDashboardStats,
   getDashboardQuickStats,
@@ -27,13 +30,17 @@ import {
   getHODs,
   getSchemesByHODId,
   getBudgetByHODId,
-  getAttendanceByHODId
+  getAttendanceByHODId,
+  getAttendance,
+  getRevenueByHODId
 } from '../services/api';
 
 ChartJS.register(
   CategoryScale,
   LinearScale,
   BarElement,
+  PointElement,
+  LineElement,
   Title,
   Tooltip,
   Legend,
@@ -50,6 +57,9 @@ const Dashboard = () => {
   });
   const [quickStats, setQuickStats] = useState({
     budgetUtilization: 0,
+    totalBudget: 0,
+    utilizedBudget: 0,
+    remainingBudget: 0,
     districtsCovered: 0,
     beneficiaries: 0,
     attendanceRate: 0,
@@ -64,12 +74,21 @@ const Dashboard = () => {
   const [revenueByDepartment, setRevenueByDepartment] = useState([]);
   const [allHODs, setAllHODs] = useState([]);
   const [selectedHOD, setSelectedHOD] = useState('');
-  const [selectedHODTable, setSelectedHODTable] = useState({ schemes: '', budget: '', attendance: '' });
+  const [selectedHODTable, setSelectedHODTable] = useState({ schemes: '', budget: '', attendance: '', revenue: '' });
+  const [revenueDetails, setRevenueDetails] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filters, setFilters] = useState({ year: 'All', month: 'All', date: '', hod_id: '' });
   const [modalOpen, setModalOpen] = useState(false);
   const [modalData, setModalData] = useState({ title: '', items: [], columns: [] });
+  // Chart filter states
+  const [chartFilters, setChartFilters] = useState({
+    revenue: { hod_id: '' },
+    schemes: { hod_id: '' },
+    budget: { hod_id: '' },
+    attendance: { hod_id: '' }
+  });
+  const [openFilterDropdown, setOpenFilterDropdown] = useState(null);
   // Detailed data for tables when HOD is selected
   const [schemesDetails, setSchemesDetails] = useState([]);
   const [budgetDetails, setBudgetDetails] = useState([]);
@@ -93,6 +112,17 @@ const Dashboard = () => {
       setAttendanceDetails([]);
     }
   }, [selectedHOD]);
+
+  // Fetch schemesDetails when chart filter changes
+  useEffect(() => {
+    if (chartFilters.schemes.hod_id) {
+      getSchemesByHODId(chartFilters.schemes.hod_id)
+        .then(res => setSchemesDetails(res.data || []))
+        .catch(err => console.error('Error fetching schemes details:', err));
+    } else if (!selectedHOD && !selectedHODTable.schemes) {
+      setSchemesDetails([]);
+    }
+  }, [chartFilters.schemes.hod_id]);
 
   const fetchDetailedTableData = async (hodId) => {
     try {
@@ -164,6 +194,9 @@ const Dashboard = () => {
       // Set quick stats
       setQuickStats({
         budgetUtilization: quickStatsRes.data.budgetUtilization || 0,
+        totalBudget: parseFloat(quickStatsRes.data.totalBudget) || 0,
+        utilizedBudget: parseFloat(quickStatsRes.data.utilizedBudget) || 0,
+        remainingBudget: parseFloat(quickStatsRes.data.remainingBudget) || 0,
         districtsCovered: quickStatsRes.data.districtsCovered || 0,
         beneficiaries: quickStatsRes.data.beneficiaries || 0,
         attendanceRate: quickStatsRes.data.attendanceRate || 0,
@@ -230,6 +263,110 @@ const Dashboard = () => {
 
   const handleRefresh = () => {
     fetchDashboardData();
+  };
+
+  // Handle chart filter change
+  const handleChartFilterChange = (chartType, hodId) => {
+    setChartFilters(prev => ({
+      ...prev,
+      [chartType]: { hod_id: hodId }
+    }));
+    setOpenFilterDropdown(null);
+  };
+
+  // Toggle filter dropdown
+  const toggleFilterDropdown = (chartType) => {
+    setOpenFilterDropdown(openFilterDropdown === chartType ? null : chartType);
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.chart-filter-container')) {
+        setOpenFilterDropdown(null);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
+
+  // Get filtered data for each chart
+  const getFilteredRevenueData = () => {
+    if (chartFilters.revenue.hod_id) {
+      return revenueByHOD.filter(item => item.hod_name === allHODs.find(h => h.id === parseInt(chartFilters.revenue.hod_id))?.name);
+    }
+    return revenueByHOD;
+  };
+
+  const getFilteredSchemesData = () => {
+    if (chartFilters.schemes.hod_id) {
+      return schemesByHOD.filter(item => item.hod_name === allHODs.find(h => h.id === parseInt(chartFilters.schemes.hod_id))?.name);
+    }
+    return schemesByHOD;
+  };
+
+  const getFilteredBudgetData = () => {
+    if (chartFilters.budget.hod_id) {
+      return budgetByHOD.filter(item => item.hod_name === allHODs.find(h => h.id === parseInt(chartFilters.budget.hod_id))?.name);
+    }
+    return budgetByHOD;
+  };
+
+  const getFilteredAttendanceData = () => {
+    if (chartFilters.attendance.hod_id) {
+      return attendanceByHOD.filter(item => item.hod_name === allHODs.find(h => h.id === parseInt(chartFilters.attendance.hod_id))?.name);
+    }
+    return attendanceByHOD;
+  };
+
+  // Render filter dropdown
+  const renderFilterDropdown = (chartType) => {
+    if (openFilterDropdown !== chartType) return null;
+    return (
+      <div style={{
+        position: 'absolute',
+        top: '100%',
+        right: 0,
+        backgroundColor: 'white',
+        border: '1px solid #ddd',
+        borderRadius: '8px',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+        zIndex: 1000,
+        minWidth: '200px',
+        padding: '8px 0'
+      }}>
+        <div style={{ padding: '8px 12px', borderBottom: '1px solid #eee', fontWeight: '600', color: '#333' }}>
+          Filter by HOD
+        </div>
+        <div 
+          style={{ 
+            padding: '8px 12px', 
+            cursor: 'pointer',
+            backgroundColor: !chartFilters[chartType].hod_id ? '#e8f5e9' : 'transparent',
+            color: !chartFilters[chartType].hod_id ? '#2e7d32' : '#333'
+          }}
+          onClick={() => handleChartFilterChange(chartType, '')}
+        >
+          All HODs
+        </div>
+        {allHODs.map(hod => (
+          <div 
+            key={hod.id}
+            style={{ 
+              padding: '8px 12px', 
+              cursor: 'pointer',
+              backgroundColor: chartFilters[chartType].hod_id === String(hod.id) ? '#e8f5e9' : 'transparent',
+              color: chartFilters[chartType].hod_id === String(hod.id) ? '#2e7d32' : '#333'
+            }}
+            onClick={() => handleChartFilterChange(chartType, String(hod.id))}
+            onMouseEnter={(e) => e.target.style.backgroundColor = chartFilters[chartType].hod_id === String(hod.id) ? '#e8f5e9' : '#f5f5f5'}
+            onMouseLeave={(e) => e.target.style.backgroundColor = chartFilters[chartType].hod_id === String(hod.id) ? '#e8f5e9' : 'transparent'}
+          >
+            {hod.name}
+          </div>
+        ))}
+      </div>
+    );
   };
 
   const handleExport = () => {
@@ -410,6 +547,215 @@ const Dashboard = () => {
     ]
   };
 
+  // Pie chart for Schemes by HOD
+  const schemesHODPieChartData = {
+    labels: schemesByHOD.map(item => item.hod_name),
+    datasets: [{
+      data: schemesByHOD.map(item => item.scheme_count || 0),
+      backgroundColor: [
+        '#1565c0', // Blue
+        '#2e7d32', // Green
+        '#ef6c00', // Orange
+        '#7b1fa2', // Purple
+        '#c62828', // Red
+        '#00838f', // Teal
+        '#FFD700', // Gold
+        '#E91E63', // Pink
+        '#795548', // Brown
+        '#607D8B'  // Blue Grey
+      ],
+      borderWidth: 2,
+      borderColor: '#ffffff',
+      hoverOffset: 8
+    }]
+  };
+
+  // Pie chart for Budget by HOD (allocated amounts with Cr/Lakhs formatting)
+  const filteredBudgetData = getFilteredBudgetData();
+  const budgetHODPieChartData = {
+    labels: filteredBudgetData.map(item => {
+      const budget = item.allocated || 0;
+      const budgetLabel = budget >= 10000000 ? `${(budget / 10000000).toFixed(1)}Cr` : 
+                          budget >= 100000 ? `${(budget / 100000).toFixed(1)}L` :
+                          budget >= 1000 ? `${(budget / 1000).toFixed(0)}K` : budget.toString();
+      return `${item.hod_name} (${budgetLabel})`;
+    }),
+    datasets: [{
+      data: filteredBudgetData.map(item => item.allocated || 0),
+      backgroundColor: [
+        '#1565c0', // Blue
+        '#2e7d32', // Green
+        '#ef6c00', // Orange
+        '#7b1fa2', // Purple
+        '#c62828', // Red
+        '#00838f', // Teal
+        '#FFD700', // Gold
+        '#E91E63', // Pink
+        '#795548', // Brown
+        '#607D8B'  // Blue Grey
+      ],
+      borderWidth: 2,
+      borderColor: '#ffffff',
+      hoverOffset: 8
+    }]
+  };
+
+  // Pie chart for Attendance by HOD (Present, Absent, Half Day, Late, Leave)
+  const filteredAttendanceData = getFilteredAttendanceData();
+  const attendanceTotalsForChart = filteredAttendanceData.reduce((acc, item) => {
+    acc.present += item.present || 0;
+    acc.absent += item.absent || 0;
+    acc.half_day += item.half_day || 0;
+    acc.late += item.late || 0;
+    acc.on_leave += item.on_leave || 0;
+    return acc;
+  }, { present: 0, absent: 0, half_day: 0, late: 0, on_leave: 0 });
+
+  const attendanceHODPieChartData = {
+    labels: ['Present', 'Absent', 'Half Day', 'Late', 'Leave'],
+    datasets: [{
+      data: [
+        attendanceTotalsForChart.present,
+        attendanceTotalsForChart.absent,
+        attendanceTotalsForChart.half_day,
+        attendanceTotalsForChart.late,
+        attendanceTotalsForChart.on_leave
+      ],
+      backgroundColor: [
+        '#4CAF50', // Green for Present
+        '#F44336', // Red for Absent
+        '#FF9800', // Orange for Half Day
+        '#9C27B0', // Purple for Late
+        '#2196F3'  // Blue for Leave
+      ],
+      borderWidth: 0,
+      hoverOffset: 10,
+      // Spacing between slices
+      spacing: 2
+    }]
+  };
+
+  // HOD Revenue Pie Chart Data (showing department with formatted amounts)
+  const filteredRevenueData = getFilteredRevenueData();
+  const hodRevenueChartData = {
+    labels: filteredRevenueData.map(item => {
+      const revenue = item.total_revenue || 0;
+      const revenueLabel = revenue >= 10000000 ? `${(revenue / 10000000).toFixed(0)}Cr` : 
+                           revenue >= 100000 ? `${(revenue / 100000).toFixed(0)}L` :
+                           revenue >= 1000 ? `${(revenue / 1000).toFixed(0)}K` : 
+                           revenue > 0 ? revenue.toString() : '0';
+      // Use department name instead of hod_name
+      const deptName = item.department || item.hod_name || 'Unknown';
+      return `${deptName} (${revenueLabel})`;
+    }),
+    datasets: [{
+      data: filteredRevenueData.map(item => item.total_revenue || 0),
+      backgroundColor: [
+        '#FFD700', // Yellow/Gold
+        '#7B68EE', // Purple/Violet
+        '#FF6347', // Tomato/Orange-Red
+        '#40E0D0', // Turquoise/Cyan
+        '#4169E1', // Royal Blue
+        '#FF69B4', // Hot Pink
+        '#32CD32', // Lime Green
+        '#FF4500', // Orange Red
+        '#8B4513', // Saddle Brown
+        '#708090'  // Slate Grey
+      ],
+      borderWidth: 0,
+      hoverOffset: 8
+    }]
+  };
+
+  // Helper function to get status color
+  const getStatusColor = (status) => {
+    switch (status?.toUpperCase()) {
+      case 'COMPLETED': return 'rgba(76, 175, 80, 0.8)'; // Green
+      case 'PLANNED': return 'rgba(255, 193, 7, 0.8)';   // Yellow
+      case 'ACTIVE': return 'rgba(33, 150, 243, 0.8)';   // Blue
+      default: return 'rgba(158, 158, 158, 0.8)';        // Grey
+    }
+  };
+
+  // Schemes HOD wise - Combined Bar and Line Chart Data
+  const filteredSchemesData = getFilteredSchemesData();
+  
+  // When HOD is selected via chart filter, show scheme-wise data with status colors
+  const isSchemeWiseView = chartFilters.schemes.hod_id && schemesDetails.length > 0;
+  
+  const schemesHODBarLineData = isSchemeWiseView ? {
+    labels: schemesDetails.map(item => item.name?.split(' ').slice(0, 3).join(' ') || 'Unknown'),
+    datasets: [
+      {
+        type: 'bar',
+        label: 'Scheme Budget',
+        data: schemesDetails.map(item => (item.total_budget || 0) / 100000), // In Lakhs
+        backgroundColor: schemesDetails.map(item => getStatusColor(item.status)),
+        borderRadius: 6,
+        borderSkipped: false,
+        yAxisID: 'y',
+        order: 2
+      },
+      {
+        type: 'line',
+        label: 'Utilized Budget (L)',
+        data: schemesDetails.map(item => (item.budget_utilized || 0) / 100000),
+        borderColor: '#FF5722',
+        backgroundColor: 'rgba(255, 87, 34, 0.1)',
+        borderWidth: 3,
+        pointBackgroundColor: '#FF5722',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2,
+        pointRadius: 6,
+        pointHoverRadius: 8,
+        tension: 0.4,
+        fill: true,
+        yAxisID: 'y1',
+        order: 1
+      }
+    ]
+  } : {
+    labels: filteredSchemesData.map(item => item.hod_name?.split(' ').slice(0, 2).join(' ') || 'Unknown'),
+    datasets: [
+      {
+        type: 'bar',
+        label: 'Scheme Count',
+        data: filteredSchemesData.map(item => item.scheme_count || 0),
+        backgroundColor: [
+          'rgba(21, 101, 192, 0.8)',
+          'rgba(46, 125, 50, 0.8)',
+          'rgba(239, 108, 0, 0.8)',
+          'rgba(123, 31, 162, 0.8)',
+          'rgba(198, 40, 40, 0.8)',
+          'rgba(0, 131, 143, 0.8)',
+          'rgba(255, 215, 0, 0.8)',
+          'rgba(233, 30, 99, 0.8)'
+        ],
+        borderRadius: 6,
+        borderSkipped: false,
+        yAxisID: 'y',
+        order: 2
+      },
+      {
+        type: 'line',
+        label: 'Budget Trend (Cr)',
+        data: filteredSchemesData.map(item => (item.total_budget || 0) / 10000000),
+        borderColor: '#FF5722',
+        backgroundColor: 'rgba(255, 87, 34, 0.1)',
+        borderWidth: 3,
+        pointBackgroundColor: '#FF5722',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2,
+        pointRadius: 6,
+        pointHoverRadius: 8,
+        tension: 0.4,
+        fill: true,
+        yAxisID: 'y1',
+        order: 1
+      }
+    ]
+  };
+
   const revenueChartData = {
     labels: revenueByDepartment.map(item => item.department),
     datasets: [{
@@ -450,15 +796,19 @@ const Dashboard = () => {
         attendanceTotals.half_day,
         attendanceTotals.on_leave
       ],
-      backgroundColor: [
-        '#4CAF50', // Green for present
-        '#F44336', // Red for absent
-        '#FF9800', // Orange for half day
-        '#2196F3'  // Blue for on leave
-      ],
-      borderWidth: 3,
-      borderColor: '#ffffff',
-      hoverOffset: 8
+      // backgroundColor: [
+      //   '#4CAF50', // Green for present
+      //   '#F44336', // Red for absent
+      //   '#FF9800', // Orange for half day
+      //   '#2196F3'  // Blue for on leave
+      // ],
+      distance:30,
+      connectedWidth:1,
+      connectorColor: '#555',
+
+      // borderWidth: 3,
+      // borderColor: '#ffffff',
+      // hoverOffset: 8
     }]
   };
 
@@ -571,6 +921,52 @@ const Dashboard = () => {
             { key: 'on_leave', label: 'On Leave' }
           ];
         }
+      } else if (chartType === 'attendanceByStatus') {
+        // Get attendance list by status (Present, Absent, Half Day, Late, Leave)
+        const statusMap = {
+          'Present': 'present',
+          'Absent': 'absent',
+          'Half Day': 'half_day',
+          'Late': 'late',
+          'Leave': 'on_leave'
+        };
+        const statusKey = statusMap[clickedItem] || clickedItem.toLowerCase();
+        
+        try {
+          const attendanceResponse = await getAttendance();
+          const allAttendance = attendanceResponse.data || [];
+          
+          // Filter by status
+          const filteredAttendance = allAttendance.filter(item => {
+            if (clickedItem === 'Present') return item.status === 'present';
+            if (clickedItem === 'Absent') return item.status === 'absent';
+            if (clickedItem === 'Half Day') return item.status === 'half_day';
+            if (clickedItem === 'Late') return item.status === 'late';
+            if (clickedItem === 'Leave') return item.status === 'on_leave' || item.status === 'leave';
+            return false;
+          });
+          
+          items = filteredAttendance.map(item => ({
+            staff_name: item.staff_name || item.name || 'Unknown',
+            department: item.department || '-',
+            date: item.date ? new Date(item.date).toLocaleDateString() : '-',
+            check_in: item.check_in || '-',
+            check_out: item.check_out || '-',
+            status: item.status || clickedItem
+          }));
+          
+          title = `${clickedItem} Staff List (${items.length})`;
+          columns = [
+            { key: 'staff_name', label: 'Staff Name' },
+            { key: 'department', label: 'Department' },
+            { key: 'date', label: 'Date' },
+            { key: 'check_in', label: 'Check In' },
+            { key: 'check_out', label: 'Check Out' }
+          ];
+        } catch (err) {
+          console.error('Error fetching attendance by status:', err);
+          items = [];
+        }
       }
 
       if (items.length > 0) {
@@ -613,7 +1009,7 @@ const Dashboard = () => {
                 const value = data.datasets[0].data[i];
                 const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
                 return {
-                  text: `${label} (${value}) - ${percentage}%`,
+                  text: `${label} - ${percentage}%`,
                   fillStyle: data.datasets[0].backgroundColor[i],
                   strokeStyle: data.datasets[0].borderColor || '#ffffff',
                   lineWidth: data.datasets[0].borderWidth || 0,
@@ -763,6 +1159,287 @@ const Dashboard = () => {
     }
   };
 
+  // Schemes Bar + Line Chart Options
+  const schemesBarLineOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: {
+      mode: 'index',
+      intersect: false,
+    },
+    plugins: {
+      legend: {
+        position: 'top',
+        labels: {
+          padding: 15,
+          usePointStyle: true,
+          font: {
+            size: 12,
+            weight: '500'
+          }
+        }
+      },
+      tooltip: {
+        backgroundColor: 'rgba(0, 0, 0, 0.85)',
+        padding: 12,
+        titleFont: { size: 14, weight: 'bold' },
+        bodyFont: { size: 13 },
+        callbacks: {
+          label: function(context) {
+            let label = context.dataset.label || '';
+            if (label) {
+              label += ': ';
+            }
+            if (context.dataset.type === 'line') {
+              label += formatCurrency(context.parsed.y * 10000000);
+            } else {
+              label += context.parsed.y + ' schemes';
+            }
+            return label;
+          }
+        }
+      }
+    },
+    scales: {
+      y: {
+        type: 'linear',
+        display: true,
+        position: 'left',
+        beginAtZero: true,
+        title: {
+          display: true,
+          text: 'Scheme Count',
+          font: { size: 11, weight: '600' }
+        },
+        grid: {
+          color: 'rgba(0, 0, 0, 0.06)'
+        },
+        ticks: {
+          stepSize: 1
+        }
+      },
+      y1: {
+        type: 'linear',
+        display: true,
+        position: 'right',
+        beginAtZero: true,
+        title: {
+          display: true,
+          text: 'Budget (Cr)',
+          font: { size: 11, weight: '600' }
+        },
+        grid: {
+          drawOnChartArea: false,
+        },
+        ticks: {
+          callback: function(value) {
+            return '₹' + value + 'Cr';
+          }
+        }
+      },
+      x: {
+        grid: {
+          display: false
+        },
+        ticks: {
+          font: { size: 10 },
+          maxRotation: 45,
+          minRotation: 45
+        }
+      }
+    }
+  };
+
+  // HOD Revenue Pie Chart Options with outside labels like the reference image
+  const hodRevenuePieOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    layout: {
+      padding: {
+        top: 50,
+        bottom: 50,
+        left: 80,
+        right: 80
+      }
+    },
+    plugins: {
+      legend: {
+        display: false // Hide legend since we're showing labels outside
+      },
+      tooltip: {
+        backgroundColor: 'rgba(0, 0, 0, 0.85)',
+        padding: 12,
+        titleFont: { size: 14, weight: 'bold' },
+        bodyFont: { size: 13 },
+        callbacks: {
+          label: function(context) {
+            const value = context.parsed || 0;
+            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+            return `Revenue: ${formatCurrency(value)} (${percentage}%)`;
+          }
+        }
+      },
+      datalabels: {
+        color: '#333',
+        font: {
+          size: 11,
+          weight: '600',
+          family: "'Segoe UI', sans-serif"
+        },
+        anchor: 'end',
+        align: 'end',
+        offset: 10,
+        formatter: function(value, context) {
+          // Only return the label (department + formatted amount), not the raw value
+          const label = context.chart.data.labels[context.dataIndex];
+          // Truncate long department names if needed
+          if (label && label.length > 18) {
+            const parts = label.split(' (');
+            if (parts.length === 2) {
+              const name = parts[0].substring(0, 10) + '...';
+              return name + ' (' + parts[1];
+            }
+          }
+          return label || '';
+        },
+        display: function(context) {
+          // Only show labels for slices with data
+          return context.dataset.data[context.dataIndex] > 0;
+        }
+      }
+    },
+    onClick: (event, elements) => {
+      if (elements.length > 0) {
+        const element = elements[0];
+        const index = element.index;
+        const hodName = revenueByHOD[index]?.hod_name;
+        if (hodName) {
+          handleChartClick('revenueByHOD', hodName);
+        }
+      }
+    }
+  };
+
+  // Attendance Pie Chart Options with outside labels and callout lines
+  const attendancePieOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    layout: {
+      padding: {
+        top: 60,
+        bottom: 60,
+        left: 100,
+        right: 100
+      }
+    },
+    plugins: {
+      legend: {
+        display: false // Hide legend since we're showing labels outside
+      },
+      tooltip: {
+        backgroundColor: 'rgba(0, 0, 0, 0.85)',
+        padding: 12,
+        titleFont: { size: 14, weight: 'bold' },
+        bodyFont: { size: 13 },
+        callbacks: {
+          label: function(context) {
+            const value = context.parsed || 0;
+            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+            return `Count: ${value} (${percentage}%)`;
+          }
+        }
+      },
+      datalabels: {
+        color: function(context) {
+          return context.dataset.backgroundColor[context.dataIndex];
+        },
+        font: {
+          size: 14,
+          weight: '600',
+          family: "'Segoe UI', sans-serif"
+        },
+        anchor: 'end',
+        align: 'end',
+        offset: 35,
+        clamp: true,
+        formatter: function(value, context) {
+          const label = context.chart.data.labels[context.dataIndex];
+          return `${label} (${value})`;
+        },
+        display: function(context) {
+          return context.dataset.data[context.dataIndex] > 0;
+        }
+      }
+    },
+    elements: {
+      arc: {
+        borderWidth: 0 // Flat pie chart without borders
+      }
+    },
+    onClick: (event, elements) => {
+      if (elements.length > 0) {
+        const element = elements[0];
+        const index = element.index;
+        const statusLabels = ['Present', 'Absent', 'Half Day', 'Late', 'Leave'];
+        const clickedStatus = statusLabels[index];
+        if (clickedStatus) {
+          handleChartClick('attendanceByStatus', clickedStatus);
+        }
+      }
+    }
+  };
+
+  // Custom plugin to draw connector lines for attendance pie chart
+  const connectorLinesPlugin = {
+    id: 'connectorLines',
+    afterDraw: function(chart) {
+      const ctx = chart.ctx;
+      const meta = chart.getDatasetMeta(0);
+      
+      if (!meta || !meta.data) return;
+      
+      meta.data.forEach((arc, index) => {
+        if (chart.data.datasets[0].data[index] <= 0) return;
+        
+        const centerX = arc.x;
+        const centerY = arc.y;
+        const outerRadius = arc.outerRadius;
+        const startAngle = arc.startAngle;
+        const endAngle = arc.endAngle;
+        const middleAngle = (startAngle + endAngle) / 2;
+        
+        // Calculate points for the connector line - start from edge of pie
+        const innerPointX = centerX + Math.cos(middleAngle) * outerRadius;
+        const innerPointY = centerY + Math.sin(middleAngle) * outerRadius;
+        
+        // Extend line further out (outerRadius + 30)
+        const outerPointX = centerX + Math.cos(middleAngle) * (outerRadius + 30);
+        const outerPointY = centerY + Math.sin(middleAngle) * (outerRadius + 30);
+        
+        // Get color from dataset
+        const color = chart.data.datasets[0].backgroundColor[index];
+        
+        // Draw the connector line
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(innerPointX, innerPointY);
+        ctx.lineTo(outerPointX, outerPointY);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Draw small arrow/dot at the end
+        ctx.beginPath();
+        ctx.arc(outerPointX, outerPointY, 4, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.restore();
+      });
+    }
+  };
+
   const revenueChartOptions = {
     ...pieChartOptions,
     onClick: (event, elements) => {
@@ -788,14 +1465,14 @@ const Dashboard = () => {
 
   return (
     <div className="page-container">
-      <Header 
+      {/* <Header 
         title="Dashboard" 
         subtitle="Welcome to HOD Management System" 
         onRefresh={handleRefresh}
         onExport={handleExport}
-      />
+      /> */}
 
-      {/* Filter Bar */}
+      {/* Filter Bar - Commented out
       <div className="filter-bar">
         <div className="filter-item">
           <label>HOD</label>
@@ -856,6 +1533,7 @@ const Dashboard = () => {
           <button className="btn btn-primary btn-sm" onClick={() => fetchDashboardData()}>Apply</button>
         </div>
       </div>
+      */}
 
       {/* Hero Stats (top big cards like reference) */}
       {/* <div className="hero-stats">
@@ -940,8 +1618,15 @@ const Dashboard = () => {
       {/* Quick Stats */}
       <div className="quick-stats">
         <div className="quick-stat">
-          <h4>{quickStats.budgetUtilization}%</h4>
-          <p>Budget Utilized</p>
+          <h4>{formatCurrency(quickStats.utilizedBudget)}</h4>
+          <p>Budget Utilized ({quickStats.budgetUtilization}%)</p>
+          <div className="trend up" style={{ fontSize: '12px', color: 'var(--accent-color)', marginTop: '4px' }}>
+            <FiTrendingUp style={{ marginRight: '4px' }} /> {quickStats.budgetUtilization}% utilized
+          </div>
+        </div>
+        <div className="quick-stat">
+          <h4>{formatCurrency(quickStats.remainingBudget)}</h4>
+          <p>Remaining Budget</p>
         </div>
         <div className="quick-stat">
           <h4>{quickStats.districtsCovered}</h4>
@@ -951,166 +1636,191 @@ const Dashboard = () => {
           <h4>{formatBeneficiaries(quickStats.beneficiaries)}</h4>
           <p>Beneficiaries</p>
         </div>
-        <div className="quick-stat">
+        {/* <div className="quick-stat">
           <h4>{quickStats.attendanceRate}%</h4>
           <p>Attendance Rate</p>
-        </div>
+        </div> */}
         <div className="quick-stat">
           <h4>{quickStats.nodalOfficers}</h4>
           <p>Nodal Officers</p>
         </div>
       </div>
-      {/* Widget Cards */}
-      <div className="data-cards-grid">
-        <div className="data-card">
-          <div className="data-card-header">
-            <h4><FiUsers style={{ color: '#1565c0' }} /> HODs Summary</h4>
-          </div>
-          <div className="data-card-body">
-            {budgetByHOD.slice(0, 4).map((hod, index) => (
-              <div className="data-card-item" key={index}>
-                <div className="data-card-item-left">
-                  <div className="data-card-item-icon" style={{ background: '#e3f2fd', color: '#1565c0' }}>
-                    <FiUsers />
-                  </div>
-                  <div className="data-card-item-info">
-                    <h5>{hod.department}</h5>
-                    <span>{hod.hod_name}</span>
-                  </div>
-                </div>
-                <div className="data-card-item-value">{formatCurrency(hod.allocated)}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="data-card">
-          <div className="data-card-header">
-            <h4><FiFileText style={{ color: '#2e7d32' }} /> Schemes Overview</h4>
-          </div>
-          <div className="data-card-body">
-            {schemesByHOD.slice(0, 4).map((item, index) => (
-              <div className="data-card-item" key={index}>
-                <div className="data-card-item-left">
-                  <div className="data-card-item-icon" style={{ background: '#e8f5e9', color: '#2e7d32' }}>
-                    <FiFileText />
-                  </div>
-                  <div className="data-card-item-info">
-                    <h5>{item.hod_name}</h5>
-                    <span>{item.scheme_count} Schemes</span>
-                  </div>
-                </div>
-                <div className="data-card-item-value">{formatCurrency(item.total_budget)}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="data-card">
-          <div className="data-card-header">
-            <h4><FiDollarSign style={{ color: '#ef6c00' }} /> Budget Status</h4>
-          </div>
-          <div className="data-card-body">
-            <div className="data-card-item">
-              <div className="data-card-item-left">
-                <div className="data-card-item-icon" style={{ background: '#e3f2fd', color: '#1565c0' }}>
-                  <FiDollarSign />
-                </div>
-                <div className="data-card-item-info">
-                  <h5>Total Allocated</h5>
-                  <span>FY 2024-25</span>
-                </div>
-              </div>
-              <div className="data-card-item-value">{formatCurrency(stats.totalBudget)}</div>
-            </div>
-            <div className="data-card-item">
-              <div className="data-card-item-left">
-                <div className="data-card-item-icon" style={{ background: '#e8f5e9', color: '#2e7d32' }}>
-                  <FiTrendingUp />
-                </div>
-                <div className="data-card-item-info">
-                  <h5>Total Utilized</h5>
-                  <span>{((stats.utilizedBudget / stats.totalBudget) * 100).toFixed(1)}% utilized</span>
-                </div>
-              </div>
-              <div className="data-card-item-value">{formatCurrency(stats.utilizedBudget)}</div>
-            </div>
-            <div className="data-card-item">
-              <div className="data-card-item-left">
-                <div className="data-card-item-icon" style={{ background: '#fff3e0', color: '#ef6c00' }}>
-                  <FiActivity />
-                </div>
-                <div className="data-card-item-info">
-                  <h5>Remaining</h5>
-                  <span>To be utilized</span>
-                </div>
-              </div>
-              <div className="data-card-item-value">{formatCurrency(stats.totalBudget - stats.utilizedBudget)}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Charts */}
-      <div className="charts-grid">
+      {/* Charts - 2x2 Grid Layout */}
+      <div className="charts-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+        {/* Chart 1: HOD Revenue - Pie Chart with legend on right */}
         <div className="chart-card">
-          <div className="chart-card-header">
-            <h3><FiPieChart /> HODs by Department</h3>
+          <div className="chart-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3><FiPieChart /> HOD Revenue {chartFilters.revenue.hod_id && <span style={{ fontSize: '12px', color: '#666', fontWeight: 'normal' }}>({allHODs.find(h => h.id === parseInt(chartFilters.revenue.hod_id))?.name})</span>}</h3>
+            <div className="chart-filter-container" style={{ position: 'relative' }}>
+              <FiFilter 
+                style={{ cursor: 'pointer', color: chartFilters.revenue.hod_id ? '#2e7d32' : '#666', fontSize: '18px' }} 
+                title="Filter" 
+                onClick={(e) => { e.stopPropagation(); toggleFilterDropdown('revenue'); }}
+              />
+              {renderFilterDropdown('revenue')}
+            </div>
           </div>
           <div className="chart-card-body">
-            <div className="chart-container" style={{ cursor: 'pointer' }}>
-              <Pie data={hodsByDepartmentChartData} options={pieChartOptions} />
+            <div className="chart-container" style={{ cursor: 'pointer', height: '300px' }}>
+              <Pie data={hodRevenueChartData} options={pieChartOptions} />
             </div>
-            <p style={{ textAlign: 'center', marginTop: '10px', fontSize: '12px', color: '#666' }}>
-              Click on a segment to view HOD details
-            </p>
           </div>
         </div>
 
+        {/* Chart 2: Schemes (HOD wise) - Bar + Line Combined Chart */}
         <div className="chart-card">
-          <div className="chart-card-header">
-            <h3><FiBarChart2 /> Budget by Department (Cr)</h3>
+          <div className="chart-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+              <h3><FiBarChart2 /> {isSchemeWiseView ? 'Schemes (Scheme wise)' : 'Schemes (HOD wise)'} {chartFilters.schemes.hod_id && <span style={{ fontSize: '12px', color: '#666', fontWeight: 'normal' }}>({allHODs.find(h => h.id === parseInt(chartFilters.schemes.hod_id))?.name})</span>}</h3>
+              {isSchemeWiseView && (
+                <div style={{ display: 'flex', gap: '10px', fontSize: '11px' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span style={{ width: '12px', height: '12px', borderRadius: '3px', backgroundColor: 'rgba(76, 175, 80, 0.8)' }}></span> Completed
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span style={{ width: '12px', height: '12px', borderRadius: '3px', backgroundColor: 'rgba(255, 193, 7, 0.8)' }}></span> Planned
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span style={{ width: '12px', height: '12px', borderRadius: '3px', backgroundColor: 'rgba(33, 150, 243, 0.8)' }}></span> Active
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="chart-filter-container" style={{ position: 'relative' }}>
+              <FiFilter 
+                style={{ cursor: 'pointer', color: chartFilters.schemes.hod_id ? '#2e7d32' : '#666', fontSize: '18px' }} 
+                title="Filter" 
+                onClick={(e) => { e.stopPropagation(); toggleFilterDropdown('schemes'); }}
+              />
+              {renderFilterDropdown('schemes')}
+            </div>
           </div>
           <div className="chart-card-body">
-            <div className="chart-container" style={{ cursor: 'pointer' }}>
-              <Bar data={budgetHODChartData} options={barOptions} />
+            <div className="chart-container" style={{ cursor: 'pointer', height: '300px' }}>
+              <Bar data={schemesHODBarLineData} options={schemesBarLineOptions} />
             </div>
-            <p style={{ textAlign: 'center', marginTop: '10px', fontSize: '12px', color: '#666' }}>
-              Click on a bar to view HOD details
-            </p>
           </div>
         </div>
 
+        {/* Chart 3: Budget (HOD wise) */}
         <div className="chart-card">
-          <div className="chart-card-header">
-            <h3><FiPieChart /> Revenue by Department</h3>
+          <div className="chart-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3><FiPieChart /> Budget (HOD wise) {chartFilters.budget.hod_id && <span style={{ fontSize: '12px', color: '#666', fontWeight: 'normal' }}>({allHODs.find(h => h.id === parseInt(chartFilters.budget.hod_id))?.name})</span>}</h3>
+            <div className="chart-filter-container" style={{ position: 'relative' }}>
+              <FiFilter 
+                style={{ cursor: 'pointer', color: chartFilters.budget.hod_id ? '#2e7d32' : '#666', fontSize: '18px' }} 
+                title="Filter" 
+                onClick={(e) => { e.stopPropagation(); toggleFilterDropdown('budget'); }}
+              />
+              {renderFilterDropdown('budget')}
+            </div>
           </div>
           <div className="chart-card-body">
-            <div className="chart-container" style={{ cursor: 'pointer' }}>
-              <Pie data={revenueChartData} options={pieChartOptions} />
+            <div className="chart-container" style={{ cursor: 'pointer', height: '300px' }}>
+              <Pie data={budgetHODPieChartData} options={pieChartOptions} />
             </div>
-            <p style={{ textAlign: 'center', marginTop: '10px', fontSize: '12px', color: '#666' }}>
-              Click on a segment to view department details
-            </p>
           </div>
         </div>
 
+        {/* Chart 4: Attendance (HOD wise) - Pie Chart with outside labels */}
         <div className="chart-card">
-          <div className="chart-card-header">
-            <h3><FiPieChart /> Attendance Overview</h3>
+          <div className="chart-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3><FiPieChart /> Attendance (HOD wise) {chartFilters.attendance.hod_id && <span style={{ fontSize: '12px', color: '#666', fontWeight: 'normal' }}>({allHODs.find(h => h.id === parseInt(chartFilters.attendance.hod_id))?.name})</span>}</h3>
+            <div className="chart-filter-container" style={{ position: 'relative' }}>
+              <FiFilter 
+                style={{ cursor: 'pointer', color: chartFilters.attendance.hod_id ? '#2e7d32' : '#666', fontSize: '18px' }} 
+                title="Filter" 
+                onClick={(e) => { e.stopPropagation(); toggleFilterDropdown('attendance'); }}
+              />
+              {renderFilterDropdown('attendance')}
+            </div>
           </div>
           <div className="chart-card-body">
-            <div className="chart-container" style={{ cursor: 'pointer' }}>
-              <Pie data={attendanceChartData} options={pieChartOptions} />
+            <div className="chart-container" style={{ cursor: 'pointer', height: '390px' }}>
+              <Pie data={attendanceHODPieChartData} options={attendancePieOptions} plugins={[ChartDataLabels, connectorLinesPlugin]} />
             </div>
-            <p style={{ textAlign: 'center', marginTop: '10px', fontSize: '12px', color: '#666' }}>
-              Overall attendance statistics
-            </p>
           </div>
         </div>
       </div>
 
       {/* Tables */}
+      {/* HOD Revenue Table */}
+      <div className="table-card">
+        <div className="table-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3>Revenue {selectedHOD || selectedHODTable.revenue ? `(${allHODs.find(h => h.id === parseInt(selectedHODTable.revenue || selectedHOD))?.name || 'Selected HOD'})` : '(HOD Wise)'}</h3>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <select 
+              value={selectedHODTable.revenue || selectedHOD || ''} 
+              onChange={(e) => {
+                const hodId = e.target.value;
+                setSelectedHODTable({ ...selectedHODTable, revenue: hodId });
+                if (hodId) {
+                  getRevenueByHODId(hodId).then(res => setRevenueDetails(res.data || []));
+                } else {
+                  setRevenueDetails([]);
+                }
+              }}
+              style={{ padding: '6px 12px', borderRadius: '4px', border: '1px solid #ddd' }}
+            >
+              <option value="">All HODs</option>
+              {allHODs.map(hod => (
+                <option key={hod.id} value={hod.id}>{hod.name} - {hod.department}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                {(selectedHOD || selectedHODTable.revenue) ? (
+                  <>
+                    <th>Scheme Name</th>
+                    <th>Source</th>
+                    <th>Category</th>
+                    <th>Amount</th>
+                    <th>Date</th>
+                  </>
+                ) : (
+                  <>
+                    <th>HOD Name</th>
+                    <th>Department</th>
+                    <th>Total Revenue</th>
+                    <th>Status</th>
+                  </>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {(selectedHOD || selectedHODTable.revenue) && revenueDetails.length > 0 ? (
+                revenueDetails.map((item, index) => (
+                  <tr key={index}>
+                    <td>{item.scheme_name || '-'}</td>
+                    <td>{item.source || '-'}</td>
+                    <td>{item.category || '-'}</td>
+                    <td>{formatCurrency(item.amount)}</td>
+                    <td>{item.date ? new Date(item.date).toLocaleDateString() : '-'}</td>
+                  </tr>
+                ))
+              ) : (selectedHOD || selectedHODTable.revenue) ? (
+                <tr><td colSpan="5" style={{ textAlign: 'center', padding: '20px' }}>No revenue data found for selected HOD</td></tr>
+              ) : revenueByHOD.length > 0 ? (
+                revenueByHOD.map((item, index) => (
+                  <tr key={index}>
+                    <td>{item.hod_name}</td>
+                    <td>{item.department || '-'}</td>
+                    <td>{formatCurrency(item.total_revenue)}</td>
+                    <td><span className="status-badge active">Active</span></td>
+                  </tr>
+                ))
+              ) : (
+                <tr><td colSpan="4" style={{ textAlign: 'center', padding: '20px' }}>No revenue data found</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div className="table-card">
         <div className="table-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3>Schemes {selectedHOD ? `(${allHODs.find(h => h.id === parseInt(selectedHOD))?.name || 'Selected HOD'})` : '(HOD Wise)'}</h3>
@@ -1144,6 +1854,8 @@ const Dashboard = () => {
                     <th>Scheme Name</th>
                     <th>Category</th>
                     <th>Budget</th>
+                    <th>Utilized Budget</th>
+                    <th>Remaining Budget</th>
                     <th>Status</th>
                   </>
                 ) : (
@@ -1163,11 +1875,13 @@ const Dashboard = () => {
                     <td>{item.name}</td>
                     <td>{item.scheme_category}</td>
                     <td>{formatCurrency(item.total_budget)}</td>
+                    <td>{formatCurrency(item.budget_utilized || 0)}</td>
+                    <td>{formatCurrency((item.total_budget || 0) - (item.budget_utilized || 0))}</td>
                     <td><span className={`status-badge ${item.status?.toLowerCase() || 'active'}`}>{item.status || 'Active'}</span></td>
                   </tr>
                 ))
               ) : selectedHOD || selectedHODTable.schemes ? (
-                <tr><td colSpan="4" style={{ textAlign: 'center', padding: '20px' }}>No schemes found for selected HOD</td></tr>
+                <tr><td colSpan="6" style={{ textAlign: 'center', padding: '20px' }}>No schemes found for selected HOD</td></tr>
               ) : (
                 schemesByHOD.map((item, index) => (
                   <tr key={index}>

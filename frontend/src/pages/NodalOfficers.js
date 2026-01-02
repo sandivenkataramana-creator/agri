@@ -101,7 +101,7 @@ const NodalOfficers = () => {
   if (loading) {
     return (
       <div className="page-container">
-        <Header title="Nodal Officers Management" />
+        {/* <Header title="Nodal Officers Management" /> */}
         <div className="loading-message">Loading nodal officers...</div>
       </div>
     );
@@ -110,7 +110,7 @@ const NodalOfficers = () => {
   if (error) {
     return (
       <div className="page-container">
-        <Header title="Nodal Officers Management" />
+        {/* <Header title="Nodal Officers Management" /> */}
         <div className="error-message">{error}</div>
       </div>
     );
@@ -118,7 +118,7 @@ const NodalOfficers = () => {
 
   return (
     <div className="page-container">
-      <Header title="Nodal Officers Management" />
+      {/* <Header title="Nodal Officers Management" /> */}
 
       <div className="table-card">
         <div className="table-header">
