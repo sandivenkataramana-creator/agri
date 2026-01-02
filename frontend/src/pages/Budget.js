@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
 import Modal from '../components/Modal';
-import { FiPlus, FiEdit2, FiTrash2 } from 'react-icons/fi';
+import { FiPlus, FiEdit2, FiTrash2, FiFilter, FiX } from 'react-icons/fi';
 import { Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -26,6 +26,7 @@ const Budget = () => {
   const [villages, setVillages] = useState([]);
   const [categories, setCategories] = useState([]);
   const [filters, setFilters] = useState({ hod_id: '', category: '', state_id: '', district_id: '', mandal_id: '', village: '' });
+  const [showFilters, setShowFilters] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -220,6 +221,8 @@ const Budget = () => {
     setMandals([]);
   };
 
+  const hasActiveFilters = filters.hod_id || filters.category || filters.state_id || filters.district_id || filters.mandal_id || filters.village;
+  const activeFilterCount = [filters.hod_id, filters.category, filters.state_id, filters.district_id, filters.mandal_id, filters.village].filter(Boolean).length;
 
   const filteredBudgets = budgets.filter(b => {
     if (filters.hod_id && Number(filters.hod_id) !== Number(b.hod_id)) return false;
@@ -359,7 +362,7 @@ const Budget = () => {
   if (loading) {
     return (
       <div className="page-container">
-        <Header title="Budget Management" />
+        {/* <Header title="Budget Management" /> */}
         <div className="loading-message">Loading budget data...</div>
       </div>
     );
@@ -368,7 +371,7 @@ const Budget = () => {
   if (error) {
     return (
       <div className="page-container">
-        <Header title="Budget Management" />
+        {/* <Header title="Budget Management" /> */}
         <div className="error-message">{error}</div>
       </div>
     );
@@ -376,7 +379,7 @@ const Budget = () => {
 
   return (
     <div className="page-container">
-      <Header title="Budget Management" />
+      {/* <Header title="Budget Management" /> */}
 
       {/* Summary Cards */}
       <div className="stats-grid">
@@ -420,82 +423,149 @@ const Budget = () => {
 
       {/* Table */}
       <div className="table-card">
-        <div className="table-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <h3>Budget Entries ({filteredBudgets.length})</h3>
-            <div className="filter-bar" style={{ margin: 0 }}>
-              <div className="filter-item">
-                <label>HOD</label>
-                <select name="hod_id" value={filters.hod_id} onChange={(e) => setFilters({ ...filters, hod_id: e.target.value })}>
-                  <option value="">All HODs</option>
-                  {hods.map(hod => (
-                    <option key={hod.id} value={hod.id}>{hod.name} - {hod.department}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="filter-item">
-                <label>Category</label>
-                <select name="category" value={filters.category} onChange={handleFilterInputChange}>
-                  <option value="">All</option>
-                  {categories.map(cat => (
-                    <option key={cat.id} value={cat.name}>{cat.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="filter-item">
-                <label>State</label>
-                <select name="state_id" value={filters.state_id} onChange={(e) => handleFilterStateChange(e.target.value)}>
-                  <option value="">All</option>
-                  {states.map(s => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="filter-item">
-                <label>District</label>
-                <select name="district_id" value={filters.district_id} onChange={(e) => handleFilterDistrictChange(e.target.value)} disabled={!filters.state_id}>
-                  <option value="">All</option>
-                  {districts.map(district => (
-                    <option key={district.id} value={district.id}>{district.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="filter-item">
-                <label>Mandal</label>
-                <select name="mandal_id" value={filters.mandal_id} onChange={(e) => handleFilterMandalChange(e.target.value)} disabled={!filters.district_id}>
-                  <option value="">All</option>
-                  {mandals.map(mandal => (
-                    <option key={mandal.id} value={mandal.id}>{mandal.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="filter-item">
-                <label>Village</label>
-                <select name="village" value={filters.village} onChange={handleFilterInputChange} disabled={!filters.district_id && !filters.mandal_id}>
-                  <option value="">All</option>
-                  {villages.map((v, idx) => (
-                    <option key={idx} value={v.name}>{v.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="filter-actions">
-                <button type="button" className="btn" onClick={clearFilters}>Clear</button>
-              </div>
-            </div>
-          </div>
-
-          <div className="table-actions">
+        <div className="table-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3>Budget Entries ({filteredBudgets.length}{hasActiveFilters ? ` of ${budgets.length}` : ''})</h3>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <button 
+              className={`btn ${showFilters || hasActiveFilters ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setShowFilters(!showFilters)}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <FiFilter /> Filter {hasActiveFilters && `(${activeFilterCount})`}
+            </button>
+            {hasActiveFilters && (
+              <button 
+                className="btn btn-secondary" 
+                onClick={clearFilters}
+                style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+              >
+                <FiX /> Clear
+              </button>
+            )}
             <button type="button" className="btn btn-primary" onClick={() => handleOpenModal()}>
               <FiPlus /> Add Budget
             </button>
           </div>
         </div>
+
+        {/* Filter Panel */}
+        {showFilters && (
+          <div style={{ 
+            padding: '16px 20px', 
+            backgroundColor: '#f8f9fa', 
+            borderBottom: '1px solid #e0e0e0',
+            display: 'flex',
+            gap: '12px',
+            flexWrap: 'wrap',
+            alignItems: 'flex-end'
+          }}>
+            <div style={{ flex: '1', minWidth: '180px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontSize: '12px', fontWeight: '600', color: '#666' }}>
+                HOD
+              </label>
+              <select 
+                name="hod_id" 
+                value={filters.hod_id} 
+                onChange={(e) => setFilters({ ...filters, hod_id: e.target.value })}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '14px', backgroundColor: 'white' }}
+              >
+                <option value="">All HODs</option>
+                {hods.map(hod => (
+                  <option key={hod.id} value={hod.id}>{hod.name} - {hod.department}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ flex: '1', minWidth: '150px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontSize: '12px', fontWeight: '600', color: '#666' }}>
+                Category
+              </label>
+              <select 
+                name="category" 
+                value={filters.category} 
+                onChange={handleFilterInputChange}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '14px', backgroundColor: 'white' }}
+              >
+                <option value="">All Categories</option>
+                {categories.map(cat => (
+                  <option key={cat.id} value={cat.name}>{cat.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ flex: '1', minWidth: '150px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontSize: '12px', fontWeight: '600', color: '#666' }}>
+                State
+              </label>
+              <select 
+                name="state_id" 
+                value={filters.state_id} 
+                onChange={(e) => handleFilterStateChange(e.target.value)}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '14px', backgroundColor: 'white' }}
+              >
+                <option value="">All States</option>
+                {states.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ flex: '1', minWidth: '150px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontSize: '12px', fontWeight: '600', color: '#666' }}>
+                District
+              </label>
+              <select 
+                name="district_id" 
+                value={filters.district_id} 
+                onChange={(e) => handleFilterDistrictChange(e.target.value)} 
+                disabled={!filters.state_id}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '14px', backgroundColor: filters.state_id ? 'white' : '#f5f5f5' }}
+              >
+                <option value="">All Districts</option>
+                {districts.map(district => (
+                  <option key={district.id} value={district.id}>{district.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ flex: '1', minWidth: '150px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontSize: '12px', fontWeight: '600', color: '#666' }}>
+                Mandal
+              </label>
+              <select 
+                name="mandal_id" 
+                value={filters.mandal_id} 
+                onChange={(e) => handleFilterMandalChange(e.target.value)} 
+                disabled={!filters.district_id}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '14px', backgroundColor: filters.district_id ? 'white' : '#f5f5f5' }}
+              >
+                <option value="">All Mandals</option>
+                {mandals.map(mandal => (
+                  <option key={mandal.id} value={mandal.id}>{mandal.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ flex: '1', minWidth: '150px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontSize: '12px', fontWeight: '600', color: '#666' }}>
+                Village
+              </label>
+              <select 
+                name="village" 
+                value={filters.village} 
+                onChange={handleFilterInputChange} 
+                disabled={!filters.district_id && !filters.mandal_id}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '14px', backgroundColor: (filters.district_id || filters.mandal_id) ? 'white' : '#f5f5f5' }}
+              >
+                <option value="">All Villages</option>
+                {villages.map((v, idx) => (
+                  <option key={idx} value={v.name}>{v.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+
         <div className="table-wrapper">
           <table>
             <thead>
@@ -511,7 +581,7 @@ const Budget = () => {
                 <th>Financial Year</th>
                 <th>Allocated</th>
                 <th>Utilized</th>
-                <th>Utilization %</th>
+                <th>Remaining</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -519,9 +589,7 @@ const Budget = () => {
               {filteredBudgets.map((budget) => {
                 const allocated = parseFloat(budget.allocated_amount) || 0;
                 const utilized = parseFloat(budget.utilized_amount) || 0;
-                const utilization = allocated > 0 
-                  ? ((utilized / allocated) * 100).toFixed(1) 
-                  : 0;
+                const remaining = allocated - utilized;
                 return (
                   <tr key={budget.id}>
                     <td>{budget.hod_name || 'N/A'}</td>
@@ -535,16 +603,8 @@ const Budget = () => {
                     <td>{budget.financial_year}</td>
                     <td>{formatCurrency(allocated)}</td>
                     <td>{formatCurrency(utilized)}</td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div className="progress-bar" style={{ width: '80px' }}>
-                          <div 
-                            className={`progress-fill ${utilization >= 80 ? 'green' : utilization >= 50 ? 'blue' : 'orange'}`}
-                            style={{ width: `${utilization}%` }}
-                          ></div>
-                        </div>
-                        <span>{utilization}%</span>
-                      </div>
+                    <td style={{ color: remaining >= 0 ? 'var(--secondary-color)' : 'var(--danger-color)', fontWeight: '600' }}>
+                      {formatCurrency(remaining)}
                     </td>
                     <td>
                       <div className="action-buttons">

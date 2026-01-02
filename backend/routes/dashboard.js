@@ -22,7 +22,31 @@ function buildBudgetYearFilter(year) {
 router.get('/stats', async (req, res) => {
   try {
     const year = req.query.year;
+    const hodId = req.query.hod_id;
     const budgetFilter = buildBudgetYearFilter(year);
+
+    // If HOD is selected, filter all data by that HOD
+    if (hodId) {
+      const [hods] = await db.query('SELECT COUNT(*) as count FROM hods WHERE id = ? AND status = "active"', [hodId]);
+      const [schemes] = await db.query('SELECT COUNT(*) as count FROM schemes WHERE hod_id = ? AND status = "ACTIVE"', [hodId]);
+      const [staff] = await db.query('SELECT COUNT(*) as count FROM staff WHERE hod_id = ? AND status = "active"', [hodId]);
+
+      let budgetSql = `SELECT COALESCE(SUM(allocated_amount), 0) as total, COALESCE(SUM(utilized_amount), 0) as utilized FROM budget WHERE hod_id = ?`;
+      const budgetParams = [hodId];
+      if (budgetFilter.clause) {
+        budgetSql += ` AND financial_year = ?`;
+        budgetParams.push(budgetFilter.params[0]);
+      }
+      const [budget] = await db.query(budgetSql, budgetParams);
+
+      return res.json({
+        totalHods: hods[0].count || 0,
+        totalSchemes: schemes[0].count || 0,
+        totalStaff: staff[0].count || 0,
+        totalBudget: budget[0].total || 0,
+        utilizedBudget: budget[0].utilized || 0
+      });
+    }
 
     const [hods] = await db.query('SELECT COUNT(*) as count FROM hods WHERE status = "active"');
     const [schemes] = await db.query('SELECT COUNT(*) as count FROM schemes WHERE status = "ACTIVE"');
@@ -55,11 +79,23 @@ router.get('/stats', async (req, res) => {
 router.get('/quick-stats', async (req, res) => {
   try {
     const year = req.query.year;
+    const hodId = req.query.hod_id;
     const budgetFilter = buildBudgetYearFilter(year);
 
-    // Budget utilization
-    const budgetSql = `SELECT COALESCE(SUM(allocated_amount), 0) as total, COALESCE(SUM(utilized_amount), 0) as utilized FROM budget ${budgetFilter.clause}`;
-    const [budget] = await db.query(budgetSql, budgetFilter.params);
+    // Budget utilization - filter by HOD if provided
+    let budgetSql, budgetParams;
+    if (hodId) {
+      budgetSql = `SELECT COALESCE(SUM(allocated_amount), 0) as total, COALESCE(SUM(utilized_amount), 0) as utilized FROM budget WHERE hod_id = ?`;
+      budgetParams = [hodId];
+      if (budgetFilter.clause) {
+        budgetSql += ` AND financial_year = ?`;
+        budgetParams.push(budgetFilter.params[0]);
+      }
+    } else {
+      budgetSql = `SELECT COALESCE(SUM(allocated_amount), 0) as total, COALESCE(SUM(utilized_amount), 0) as utilized FROM budget ${budgetFilter.clause}`;
+      budgetParams = budgetFilter.params;
+    }
+    const [budget] = await db.query(budgetSql, budgetParams);
     const totalBudget = parseFloat(budget[0].total) || 0;
     const utilizedBudget = parseFloat(budget[0].utilized) || 0;
     const budgetUtilization = totalBudget > 0 ? Math.round((utilizedBudget / totalBudget) * 100) : 0;
@@ -68,16 +104,22 @@ router.get('/quick-stats', async (req, res) => {
     let districtsCovered = 0;
     try {
       // Count distinct districts from budget table (where budget entries exist)
-      const [districts] = await db.query(`
+      let districtSql = `
         SELECT COUNT(DISTINCT d.id) as count 
         FROM districts d
         INNER JOIN budget b ON d.id = b.district_id
         WHERE d.status = 1
-      `);
+      `;
+      const districtParams = [];
+      if (hodId) {
+        districtSql += ' AND b.hod_id = ?';
+        districtParams.push(hodId);
+      }
+      const [districts] = await db.query(districtSql, districtParams);
       districtsCovered = districts[0].count || 0;
       
       // If no budget entries, count all active districts
-      if (districtsCovered === 0) {
+      if (districtsCovered === 0 && !hodId) {
         const [allDistricts] = await db.query('SELECT COUNT(*) as count FROM districts WHERE status = 1');
         districtsCovered = allDistricts[0].count || 0;
       }
@@ -91,29 +133,44 @@ router.get('/quick-stats', async (req, res) => {
       }
     }
 
-    // Beneficiaries
+    // Beneficiaries - filter by HOD if provided
     let beneficiaries = 0;
     try {
-      const [beneficiariesResult] = await db.query(`SELECT COALESCE(SUM(scheme_benefits_person), 0) as total FROM schemes`);
+      let beneficiarySql = `SELECT COALESCE(SUM(scheme_benefits_person), 0) as total FROM schemes`;
+      const beneficiaryParams = [];
+      if (hodId) {
+        beneficiarySql += ' WHERE hod_id = ?';
+        beneficiaryParams.push(hodId);
+      }
+      const [beneficiariesResult] = await db.query(beneficiarySql, beneficiaryParams);
       beneficiaries = parseInt(beneficiariesResult[0].total) || 0;
     } catch (e) {
-      const [schemesCount] = await db.query('SELECT COUNT(*) as count FROM schemes');
+      let countSql = 'SELECT COUNT(*) as count FROM schemes';
+      const countParams = [];
+      if (hodId) {
+        countSql += ' WHERE hod_id = ?';
+        countParams.push(hodId);
+      }
+      const [schemesCount] = await db.query(countSql, countParams);
       beneficiaries = (schemesCount[0].count || 0) * 500000; // Estimate 5L per scheme
     }
 
-    // Attendance rate (last 30 days or filtered by year/month/date)
+    // Attendance rate (last 30 days or filtered by year/month/date) - filter by HOD if provided
     let attendanceRate = 0;
     try {
+      let hodFilter = hodId ? `AND a.hod_id = ?` : '';
       const dateFilter = req.query.date ? `AND a.date = ?` : `AND a.date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)`;
       const attendanceSql = `
         SELECT 
           COUNT(CASE WHEN a.status = 'present' THEN 1 END) as present,
           COUNT(*) as total
         FROM attendance a
-        WHERE 1=1 ${dateFilter}
+        WHERE 1=1 ${hodFilter} ${dateFilter}
       `;
-      const params = req.query.date ? [req.query.date] : [];
-      const [attendance] = await db.query(attendanceSql, params);
+      const attendanceParams = [];
+      if (hodId) attendanceParams.push(hodId);
+      if (req.query.date) attendanceParams.push(req.query.date);
+      const [attendance] = await db.query(attendanceSql, attendanceParams);
       const totalAttendance = attendance[0].total || 0;
       const presentCount = attendance[0].present || 0;
       attendanceRate = totalAttendance > 0 ? Math.round((presentCount / totalAttendance) * 100) : 95;
@@ -121,16 +178,26 @@ router.get('/quick-stats', async (req, res) => {
       attendanceRate = 95;
     }
 
+    // Nodal officers - filter by HOD if provided
     let nodalOfficers = 0;
     try {
-      const [officers] = await db.query(`SELECT COUNT(*) as count FROM nodal_officers WHERE status = 'active'`);
+      let nodalSql = `SELECT COUNT(*) as count FROM nodal_officers WHERE status = 'active'`;
+      const nodalParams = [];
+      if (hodId) {
+        nodalSql += ' AND hod_id = ?';
+        nodalParams.push(hodId);
+      }
+      const [officers] = await db.query(nodalSql, nodalParams);
       nodalOfficers = officers[0].count || 0;
     } catch (e) {
-      nodalOfficers = 12;
+      nodalOfficers = hodId ? 1 : 12;
     }
 
     res.json({
       budgetUtilization,
+      totalBudget: totalBudget,
+      utilizedBudget: utilizedBudget,
+      remainingBudget: totalBudget - utilizedBudget,
       districtsCovered: districtsCovered || 33,
       beneficiaries: beneficiaries || 2500000,
       attendanceRate: attendanceRate || 95,
@@ -140,6 +207,9 @@ router.get('/quick-stats', async (req, res) => {
     console.error('Dashboard quick stats error:', error);
     res.json({
       budgetUtilization: 66,
+      totalBudget: 0,
+      utilizedBudget: 0,
+      remainingBudget: 0,
       districtsCovered: 33,
       beneficiaries: 2500000,
       attendanceRate: 95,
@@ -152,8 +222,20 @@ router.get('/quick-stats', async (req, res) => {
 router.get('/schemes-by-category', async (req, res) => {
   try {
     const year = req.query.year;
-    const where = year && year !== 'All' ? `WHERE YEAR(start_date) = ?` : '';
-    const params = year && year !== 'All' ? [parseInt(year)] : [];
+    const hodId = req.query.hod_id;
+    let where = '';
+    const params = [];
+    
+    if (hodId) {
+      where = 'WHERE hod_id = ?';
+      params.push(hodId);
+    }
+    
+    if (year && year !== 'All') {
+      where += where ? ' AND YEAR(start_date) = ?' : 'WHERE YEAR(start_date) = ?';
+      params.push(parseInt(year));
+    }
+    
     const [results] = await db.query(`
       SELECT scheme_category as category, COUNT(*) as count, SUM(total_budget) as budget
       FROM schemes
@@ -170,16 +252,25 @@ router.get('/schemes-by-category', async (req, res) => {
 // Get HODs by department/category for pie chart
 router.get('/hods-by-department', async (req, res) => {
   try {
+    const hodId = req.query.hod_id;
+    let where = "WHERE h.status = 'active'";
+    const params = [];
+    
+    if (hodId) {
+      where += ' AND h.id = ?';
+      params.push(hodId);
+    }
+    
     const [results] = await db.query(`
       SELECT 
         h.department as category,
         COUNT(h.id) as count,
         GROUP_CONCAT(h.name SEPARATOR ', ') as hod_names
       FROM hods h
-      WHERE h.status = 'active'
+      ${where}
       GROUP BY h.department
       ORDER BY count DESC
-    `);
+    `, params);
     res.json(results);
   } catch (error) {
     console.error('Error in /hods-by-department:', error);
@@ -291,6 +382,7 @@ router.get('/attendance-by-hod', async (req, res) => {
              COUNT(CASE WHEN a.status = 'present' THEN 1 END) as present,
              COUNT(CASE WHEN a.status = 'absent' THEN 1 END) as absent,
              COUNT(CASE WHEN a.status = 'half_day' THEN 1 END) as half_day,
+             COUNT(CASE WHEN a.status = 'late' THEN 1 END) as late,
              COUNT(CASE WHEN a.status = 'leave' THEN 1 END) as on_leave
       FROM hods h
       LEFT JOIN attendance a ON h.id = a.hod_id
@@ -340,9 +432,19 @@ router.get('/revenue-by-hod', async (req, res) => {
 router.get('/revenue-by-department', async (req, res) => {
   try {
     const year = req.query.year;
+    const hodId = req.query.hod_id;
     const params = [];
-    const dateClause = year && year !== 'All' ? 'AND YEAR(r.date) = ?' : '';
-    if (year && year !== 'All') params.push(parseInt(year));
+    let whereClause = '';
+    
+    if (hodId) {
+      whereClause = 'WHERE h.id = ?';
+      params.push(hodId);
+    }
+    
+    if (year && year !== 'All') {
+      whereClause += whereClause ? ' AND YEAR(r.date) = ?' : 'WHERE YEAR(r.date) = ?';
+      params.push(parseInt(year));
+    }
 
     const [results] = await db.query(`
       SELECT 
@@ -350,7 +452,8 @@ router.get('/revenue-by-department', async (req, res) => {
         COALESCE(SUM(r.amount), 0) as total_revenue,
         COUNT(DISTINCT h.id) as hod_count
       FROM hods h
-      LEFT JOIN revenue r ON h.id = r.hod_id ${dateClause ? 'WHERE ' + dateClause.replace('AND ', '') : ''}
+      LEFT JOIN revenue r ON h.id = r.hod_id
+      ${whereClause}
       GROUP BY h.department
       ORDER BY total_revenue DESC
     `, params);

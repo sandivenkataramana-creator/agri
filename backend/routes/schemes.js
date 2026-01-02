@@ -7,10 +7,12 @@ router.get('/', async (req, res) => {
   try {
     const [results] = await db.query(`
       SELECT s.*, h.name as hod_name, h.department,
+             c.name as category_name,
              COALESCE(SUM(sba.allocated_amount), 0) as budget_allocated,
              COALESCE(SUM(sba.spent_amount), 0) as budget_utilized
       FROM schemes s 
       LEFT JOIN hods h ON s.hod_id = h.id 
+      LEFT JOIN categories c ON s.category_id = c.id
       LEFT JOIN scheme_budget_allocation sba ON s.id = sba.scheme_id
       GROUP BY s.id
       ORDER BY s.name

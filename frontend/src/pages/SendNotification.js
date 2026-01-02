@@ -91,10 +91,10 @@ const SendNotification = () => {
 
   return (
     <div className="page-container">
-      <Header 
+      {/* <Header 
         title="Send Notification" 
         subtitle="Send notifications to users" 
-      />
+      /> */}
 
       <div className="table-card" style={{ maxWidth: '800px', margin: '0 auto' }}>
         <div className="table-header">

@@ -12,14 +12,15 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// Verify transporter configuration
-transporter.verify(function (error, success) {
-  if (error) {
-    console.log('SMTP Configuration Error:', error);
-  } else {
+// Verify transporter configuration (don't crash if it fails)
+transporter.verify()
+  .then(() => {
     console.log('SMTP Server is ready to send emails');
-  }
-});
+  })
+  .catch((error) => {
+    console.log('SMTP Configuration Error:', error.message || error);
+    console.log('Email functionality will be disabled. Server will continue running.');
+  });
 
 // Email templates
 const emailTemplates = {
