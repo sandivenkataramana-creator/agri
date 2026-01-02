@@ -125,7 +125,7 @@ const Staff = () => {
   if (loading) {
     return (
       <div className="page-container">
-        <Header title="Staff Management" />
+        {/* <Header title="Staff Management" /> */}
         <div className="loading-message">Loading staff...</div>
       </div>
     );
@@ -134,7 +134,7 @@ const Staff = () => {
   if (error) {
     return (
       <div className="page-container">
-        <Header title="Staff Management" />
+        {/* <Header title="Staff Management" /> */}
         <div className="error-message">{error}</div>
       </div>
     );
@@ -142,7 +142,7 @@ const Staff = () => {
 
   return (
     <div className="page-container">
-      <Header title="Staff Management" />
+      {/* <Header title="Staff Management" /> */}
 
       <div className="table-card">
         <div className="table-header">

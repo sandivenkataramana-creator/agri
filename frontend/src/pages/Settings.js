@@ -74,7 +74,7 @@ const Settings = () => {
 
   return (
     <div className="page-container">
-      <Header title="Settings" subtitle="Manage your application settings" />
+      {/* <Header title="Settings" subtitle="Manage your application settings" /> */}
       
       {saved && (
         <div className="alert alert-success" style={{ marginBottom: 16 }}>

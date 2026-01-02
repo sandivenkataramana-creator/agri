@@ -91,10 +91,10 @@ const DashboardStaff = () => {
 
   return (
     <div className="page-container">
-      <Header 
+      {/* <Header 
         title="Staff Dashboard" 
         subtitle={`Welcome, ${user.name || 'Staff Member'}`}
-      />
+      /> */}
 
       {/* Hero Stats */}
       {/* <div className="hero-stats">

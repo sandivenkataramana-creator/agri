@@ -31,7 +31,7 @@ const Header = ({ title, subtitle, onRefresh, onExport }) => {
           <span>{title}</span>
         </div>
       </div>
-      <div className="header-right">
+      {/* <div className="header-right">
         <button className="btn btn-outline btn-sm" title="Refresh Data" onClick={handleRefresh}>
           <FiRefreshCw size={14} />
           Refresh
@@ -40,7 +40,7 @@ const Header = ({ title, subtitle, onRefresh, onExport }) => {
           <FiDownload size={14} />
           Export
         </button>
-      </div>
+      </div> */}
     </header>
   );
 };

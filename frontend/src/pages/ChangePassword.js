@@ -83,7 +83,7 @@ const ChangePassword = () => {
 
   return (
     <div className="page-container">
-      <Header title="Change Password" subtitle="Update your account password" />
+      {/* <Header title="Change Password" subtitle="Update your account password" /> */}
 
       <div className="table-card" style={{ maxWidth: '600px', margin: '0 auto' }}>
         <div className="table-header">

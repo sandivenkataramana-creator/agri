@@ -129,10 +129,10 @@ const DashboardHOD = () => {
 
   return (
     <div className="page-container">
-      <Header 
+      {/* <Header 
         title="HOD Dashboard" 
         subtitle={`Welcome, ${user.name || 'HOD'}`}
-      />
+      /> */}
 
       
 

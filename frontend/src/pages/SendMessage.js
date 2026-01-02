@@ -80,10 +80,10 @@ const SendMessage = () => {
 
   return (
     <div className="page-container">
-      <Header 
+      {/* <Header 
         title="Send Message" 
         subtitle="Send messages to users" 
-      />
+      /> */}
 
       <div className="table-card" style={{ maxWidth: '800px', margin: '0 auto' }}>
         <div className="table-header">
